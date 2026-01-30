@@ -1,22 +1,35 @@
-import { network } from "hardhat";
+import { network } from 'hardhat'
 
-const { ethers } = await network.connect({
-  network: "hardhatOp",
-  chainType: "op",
-});
+const { ethers } = await network.connect()
 
-console.log("Sending transaction using the OP chain type");
+async function main() {
+  console.log('Using network specified in CLI (e.g. Sepolia)')
 
-const [sender] = await ethers.getSigners();
+  // Получаем подписанта (signer) из твоего .env (SEPOLIA_PRIVATE_KEY)
+  const [sender] = await ethers.getSigners()
 
-console.log("Sending 1 wei from", sender.address, "to itself");
+  console.log('Sender address:', sender.address)
+  // Проверка: здесь должен быть ТВОЙ адрес кошелька, а не 0xf39Fd...
 
-console.log("Sending L2 transaction");
-const tx = await sender.sendTransaction({
-  to: sender.address,
-  value: 1n,
-});
+  console.log('Sending 1 wei from', sender.address, 'to itself')
 
-await tx.wait();
+  // Отправляем транзакцию
+  const tx = await sender.sendTransaction({
+    to: '0x86A5A05aC0cAb580d3f0082A70E3f65281aABAf0',
+    value: 1n, // 1 wei
+  })
 
-console.log("Transaction sent successfully");
+  console.log('Transaction hash:', tx.hash)
+
+  // Ждем подтверждения
+  await tx.wait()
+
+  console.log('Transaction confirmed!')
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })
