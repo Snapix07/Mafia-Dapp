@@ -1,0 +1,7 @@
+{
+  "sepolia": {
+    "MafiaToken": "0x9bb760552eAE714014DB32CEed2059A09fab956f",
+    "MafiaGame": "0x0C7055dF1b367F79D9510f29Ea9e3e53686bf0Fd",
+    "chainId": 11155111
+  }
+}
