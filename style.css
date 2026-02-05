@@ -1,0 +1,125 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+h1, h2, h3 {
+  margin-bottom: 10px;
+}
+
+button {
+  background: #7c3aed;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #6d28d9;
+}
+
+button:disabled {
+  background: #374151;
+  cursor: not-allowed;
+}
+
+.container {
+  max-width: 1000px;
+  margin: auto;
+  padding: 20px;
+}
+
+/* HEADER */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.wallet {
+  font-size: 14px;
+  color: #a5b4fc;
+}
+
+/* INFO BOX */
+.info-box {
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+/* GAME LIST */
+.games {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 15px;
+}
+
+.game-card {
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 15px;
+}
+
+/* GAME PAGE */
+.status {
+  font-size: 18px;
+  font-weight: bold;
+  color: #facc15;
+}
+
+.timer {
+  margin-top: 5px;
+  color: #93c5fd;
+}
+
+/* PLAYERS */
+.players {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.player-card {
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+
+.player-dead {
+  opacity: 0.5;
+}
+
+.role {
+  font-size: 14px;
+  color: #c7d2fe;
+}
+
+/* ACTIONS */
+.actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hint {
+  font-size: 13px;
+  color: #9ca3af;
+  margin-top: 10px;
+}
