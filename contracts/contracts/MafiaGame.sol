@@ -4,31 +4,12 @@ pragma solidity ^0.8.28;
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./MafiaToken.sol";
 
-
 contract MafiaGame is ReentrancyGuard {
 
-    enum GameState {
-        Waiting,        
-        Night,          
-        Day,           
-        Voting,         
-        Finished        
-    }
+    enum GameState { Waiting, Night, Day, Voting, Finished }
+    enum Role { None, Mafia, Villager, Doctor }
+    enum Team { None, Mafia, Villagers }
 
-    enum Role {
-        None,
-        Mafia,
-        Villager,
-        Doctor
-    }
-
-    enum Team {
-        None,
-        Mafia,
-        Villagers
-    }
-
-    // ========== STRUCTS ==========
     struct Player {
         address playerAddress;
         Role role;
@@ -56,19 +37,22 @@ contract MafiaGame is ReentrancyGuard {
         address doctorTarget;
         mapping(address => address) dayVotes;
         uint256 votesCount;
+        uint256 prizePool; // <--- ADDED: Фонд игры (ETH)
     }
 
-    // ========== STATE VARIABLES ==========
     MafiaToken public rewardToken;
     uint256 public gameCounter;
     uint256 public constant MIN_PLAYERS = 3;
     uint256 public constant MAX_PLAYERS = 10;
     uint256 public constant PHASE_DURATION = 5 minutes;
-    uint256 public constant REWARD_PER_WIN = 100 * 10**18; // 100 токенов
+    
+    // <--- ADDED: "Contribution" amount
+    uint256 public constant ENTRY_FEE = 0.001 ether; 
+    uint256 public constant REWARD_PER_WIN = 100 * 10**18;
 
     mapping(uint256 => Game) private games;
 
-    // ========== EVENTS ==========
+    // Events
     event GameCreated(uint256 indexed gameId, address indexed creator);
     event PlayerJoined(uint256 indexed gameId, address indexed player);
     event GameStarted(uint256 indexed gameId, uint256 playerCount);
@@ -77,8 +61,8 @@ contract MafiaGame is ReentrancyGuard {
     event VoteCast(uint256 indexed gameId, address indexed voter, address indexed target);
     event GameEnded(uint256 indexed gameId, Team winner);
     event RewardIssued(uint256 indexed gameId, address indexed player, uint256 amount);
+    event PrizeDistributed(uint256 indexed gameId, address indexed winner, uint256 ethAmount); // <--- ADDED
 
-    // ========== MODIFIERS ==========
     modifier gameExists(uint256 gameId) {
         require(games[gameId].isActive, "Game does not exist");
         _;
@@ -99,14 +83,10 @@ contract MafiaGame is ReentrancyGuard {
         _;
     }
 
-    // ========== CONSTRUCTOR ==========
     constructor(address _tokenAddress) {
         rewardToken = MafiaToken(_tokenAddress);
     }
 
-    // ========== GAME MANAGEMENT ==========
-
-   
     function createGame() external returns (uint256) {
         gameCounter++;
         uint256 gameId = gameCounter;
@@ -121,19 +101,22 @@ contract MafiaGame is ReentrancyGuard {
         return gameId;
     }
 
-   
+    // <--- CHANGED: Payable join
     function joinGame(uint256 gameId) 
         external 
+        payable 
         gameExists(gameId) 
         inState(gameId, GameState.Waiting) 
     {
         Game storage game = games[gameId];
         require(!game.hasJoined[msg.sender], "Already joined");
         require(game.playerCount < MAX_PLAYERS, "Game is full");
+        require(msg.value == ENTRY_FEE, "Must pay 0.001 ETH entry fee"); // <--- Crowdfunding logic
 
         game.hasJoined[msg.sender] = true;
         game.playerAddresses.push(msg.sender);
         game.playerCount++;
+        game.prizePool += msg.value; // <--- Track contribution
 
         game.players[msg.sender] = Player({
             playerAddress: msg.sender,
@@ -146,7 +129,6 @@ contract MafiaGame is ReentrancyGuard {
         emit PlayerJoined(gameId, msg.sender);
     }
 
-    
     function startGame(uint256 gameId) 
         external 
         gameExists(gameId) 
@@ -165,12 +147,10 @@ contract MafiaGame is ReentrancyGuard {
         emit PhaseChanged(gameId, GameState.Night);
     }
 
-
     function _assignRoles(uint256 gameId) private {
         Game storage game = games[gameId];
         uint256 mafiaCount = game.playerCount / 3; 
         if (mafiaCount == 0) mafiaCount = 1;
-
     
         uint256 randomSeed = uint256(keccak256(abi.encodePacked(
             block.timestamp,
@@ -192,26 +172,20 @@ contract MafiaGame is ReentrancyGuard {
                 game.villagersCount++;
             }
         }
-
         _shufflePlayers(gameId, randomSeed);
     }
 
-   
     function _shufflePlayers(uint256 gameId, uint256 seed) private {
         Game storage game = games[gameId];
         uint256 n = game.playerCount;
 
         for (uint256 i = 0; i < n; i++) {
             uint256 j = i + (uint256(keccak256(abi.encodePacked(seed, i))) % (n - i));
-            
             address tempAddr = game.playerAddresses[i];
             game.playerAddresses[i] = game.playerAddresses[j];
             game.playerAddresses[j] = tempAddr;
         }
     }
-
-    // ========== GAME ACTIONS ==========
-
 
     function mafiaKill(uint256 gameId, address target) 
         external 
@@ -224,11 +198,9 @@ contract MafiaGame is ReentrancyGuard {
         require(game.players[msg.sender].role == Role.Mafia, "Only Mafia can kill");
         require(game.players[target].isAlive, "Target is already dead");
         require(target != msg.sender, "Cannot target yourself");
-
         game.mafiaTarget = target;
     }
 
-   
     function doctorHeal(uint256 gameId, address target) 
         external 
         gameExists(gameId)
@@ -239,11 +211,9 @@ contract MafiaGame is ReentrancyGuard {
         Game storage game = games[gameId];
         require(game.players[msg.sender].role == Role.Doctor, "Only Doctor can heal");
         require(game.players[target].isAlive, "Target is already dead");
-
         game.doctorTarget = target;
     }
 
-  
     function endNight(uint256 gameId) 
         external 
         gameExists(gameId)
@@ -252,22 +222,17 @@ contract MafiaGame is ReentrancyGuard {
         Game storage game = games[gameId];
         require(block.timestamp >= game.phaseEndTime, "Phase not ended yet");
 
-        // Проверяем, спас ли доктор цель
         if (game.mafiaTarget != address(0)) {
             if (game.mafiaTarget != game.doctorTarget) {
                 _killPlayer(gameId, game.mafiaTarget);
                 emit PlayerKilled(gameId, game.mafiaTarget);
             }
         }
-
         
         game.mafiaTarget = address(0);
         game.doctorTarget = address(0);
 
-        
-        if (_checkWinCondition(gameId)) {
-            return;
-        }
+        if (_checkWinCondition(gameId)) return;
 
         game.state = GameState.Day;
         game.phaseEndTime = block.timestamp + PHASE_DURATION;
@@ -285,7 +250,6 @@ contract MafiaGame is ReentrancyGuard {
         game.state = GameState.Voting;
         game.phaseEndTime = block.timestamp + PHASE_DURATION;
         game.votesCount = 0;
-
         emit PhaseChanged(gameId, GameState.Voting);
     }
 
@@ -308,7 +272,6 @@ contract MafiaGame is ReentrancyGuard {
         emit VoteCast(gameId, msg.sender, target);
     }
 
-    
     function endVoting(uint256 gameId) 
         external 
         gameExists(gameId)
@@ -320,38 +283,27 @@ contract MafiaGame is ReentrancyGuard {
             "Voting not complete"
         );
 
-        
         address ejected = _findMostVoted(gameId);
-        
         if (ejected != address(0)) {
             _killPlayer(gameId, ejected);
             emit PlayerKilled(gameId, ejected);
         }
 
-        
         _resetVotes(gameId);
+        if (_checkWinCondition(gameId)) return;
 
-        
-        if (_checkWinCondition(gameId)) {
-            return;
-        }
-
-    
         game.state = GameState.Night;
         game.currentPhase++;
         game.phaseEndTime = block.timestamp + PHASE_DURATION;
         emit PhaseChanged(gameId, GameState.Night);
     }
 
-    // ========== INTERNAL FUNCTIONS ==========
-
     function _killPlayer(uint256 gameId, address player) private {
         Game storage game = games[gameId];
         game.players[player].isAlive = false;
         game.aliveCount--;
 
-        Role role = game.players[player].role;
-        if (role == Role.Mafia) {
+        if (game.players[player].role == Role.Mafia) {
             game.mafiaCount--;
         } else {
             game.villagersCount--;
@@ -370,13 +322,11 @@ contract MafiaGame is ReentrancyGuard {
                 mostVoted = playerAddr;
             }
         }
-
         return mostVoted;
     }
 
     function _resetVotes(uint256 gameId) private {
         Game storage game = games[gameId];
-        
         for (uint256 i = 0; i < game.playerCount; i++) {
             address playerAddr = game.playerAddresses[i];
             game.players[playerAddr].hasVoted = false;
@@ -390,62 +340,51 @@ contract MafiaGame is ReentrancyGuard {
             _endGame(gameId, Team.Mafia);
             return true;
         }
-
-        
         if (game.mafiaCount == 0) {
             _endGame(gameId, Team.Villagers);
             return true;
         }
-
         return false;
     }
 
     function _endGame(uint256 gameId, Team winner) private {
         Game storage game = games[gameId];
         game.state = GameState.Finished;
+        game.isActive = false;
         game.winner = winner;
 
+        uint256 winnerCount = 0;
         for (uint256 i = 0; i < game.playerCount; i++) {
-            address playerAddr = game.playerAddresses[i];
-            Player storage player = game.players[playerAddr];
-
-            bool isWinner = (winner == Team.Mafia && player.role == Role.Mafia) ||
-                           (winner == Team.Villagers && player.role != Role.Mafia);
-
-            if (isWinner) {
-                rewardToken.mint(playerAddr, REWARD_PER_WIN);
-                emit RewardIssued(gameId, playerAddr, REWARD_PER_WIN);
-            }
+            address p = game.playerAddresses[i];
+            bool isWinner = (winner == Team.Mafia && game.players[p].role == Role.Mafia) ||
+                           (winner == Team.Villagers && game.players[p].role != Role.Mafia);
+            if (isWinner) winnerCount++;
         }
 
+        if (winnerCount > 0 && game.prizePool > 0) {
+            uint256 share = game.prizePool / winnerCount;
+            for (uint256 i = 0; i < game.playerCount; i++) {
+                address p = game.playerAddresses[i];
+                bool isWinner = (winner == Team.Mafia && game.players[p].role == Role.Mafia) ||
+                               (winner == Team.Villagers && game.players[p].role != Role.Mafia);
+                
+                if (isWinner) {
+                    rewardToken.mint(p, REWARD_PER_WIN); // Tokens
+                    payable(p).transfer(share); // ETH (Contribution return)
+                    emit PrizeDistributed(gameId, p, share);
+                }
+            }
+        }
         emit GameEnded(gameId, winner);
     }
 
-    // ========== VIEW FUNCTIONS ==========
-
-    function getGameInfo(uint256 gameId) external view returns (
-        GameState state,
-        uint256 playerCount,
-        uint256 aliveCount,
-        uint256 phaseEndTime,
-        Team winner
-    ) {
+    // View Functions
+    function getGameInfo(uint256 gameId) external view returns (GameState, uint256, uint256, uint256, Team) {
         Game storage game = games[gameId];
-        return (
-            game.state,
-            game.playerCount,
-            game.aliveCount,
-            game.phaseEndTime,
-            game.winner
-        );
+        return (game.state, game.playerCount, game.aliveCount, game.phaseEndTime, game.winner);
     }
 
-    function getPlayerInfo(uint256 gameId, address player) external view returns (
-        Role role,
-        bool isAlive,
-        bool hasVoted,
-        uint256 votesReceived
-    ) {
+    function getPlayerInfo(uint256 gameId, address player) external view returns (Role, bool, bool, uint256) {
         Game storage game = games[gameId];
         Player storage p = game.players[player];
         return (p.role, p.isAlive, p.hasVoted, p.votesReceived);

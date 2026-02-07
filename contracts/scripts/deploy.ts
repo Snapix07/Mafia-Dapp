@@ -5,21 +5,18 @@ async function main() {
 
   console.log('Deploying Mafia Game contracts...')
 
-  // 1. Деплоим токен
   const MafiaToken = await ethers.getContractFactory('MafiaToken')
   const token = await MafiaToken.deploy()
   await token.waitForDeployment()
   const tokenAddress = await token.getAddress()
   console.log('✅ MafiaToken deployed to:', tokenAddress)
 
-  // 2. Деплоим игру
   const MafiaGame = await ethers.getContractFactory('MafiaGame')
   const game = await MafiaGame.deploy(tokenAddress)
   await game.waitForDeployment()
   const gameAddress = await game.getAddress()
   console.log('✅ MafiaGame deployed to:', gameAddress)
 
-  // 3. Передаем ownership токена контракту игры
   console.log('Transferring token ownership to game contract...')
   const tx = await token.transferOwnership(gameAddress)
   await tx.wait()
