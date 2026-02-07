@@ -10,7 +10,8 @@ const ABI = [
   "function voteToEject(uint256,address)",
   "function getGameInfo(uint256) view returns (uint8,uint256,uint256,uint256,uint8)",
   "function getPlayers(uint256) view returns (address[])",
-  "function getPlayerInfo(uint256,address) view returns (uint8,bool,bool,uint256)"
+  "function getPlayerInfo(uint256,address) view returns (uint8,bool,bool,uint256)",
+  "function isPlayerInGame(uint256,address) view returns (bool)"
 ];
 
 const gameId = new URLSearchParams(window.location.search).get("id");
@@ -20,8 +21,6 @@ let provider, signer, contract, user;
 const statusDiv = document.getElementById("status");
 const timerDiv = document.getElementById("timer");
 const playersDiv = document.getElementById("players");
-const waitingText = document.getElementById("waitingText");
-
 
 document.getElementById("startGame").onclick = () => call("startGame");
 document.getElementById("endNight").onclick = () => call("endNight");
@@ -31,12 +30,27 @@ document.getElementById("endVoting").onclick = () => call("endVoting");
 init();
 
 async function init() {
+  if (!window.ethereum) {
+    alert("Please install MetaMask");
+    window.location.href = "index.html";
+    return;
+  }
+
   provider = new ethers.BrowserProvider(window.ethereum);
   signer = await provider.getSigner();
   user = await signer.getAddress();
+
   contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-  loadGame();
+  // 🔐 ПРОВЕРКА: пользователь реально JOIN
+  const inGame = await contract.isPlayerInGame(gameId, user);
+  if (!inGame) {
+    alert("You must join the game first");
+    window.location.href = "index.html";
+    return;
+  }
+
+  await loadGame();
   setInterval(loadGame, 4000);
 }
 
@@ -47,33 +61,35 @@ async function call(fn) {
 
 async function loadGame() {
   const info = await contract.getGameInfo(gameId);
-const playerCount = Number(info[1]);
-
-if (state === "Waiting" && playerCount < 3) {
-  waitingText.style.display = "block";
-} else {
-  waitingText.style.display = "none";
-}
-
+  const state = ["Waiting", "Night", "Day", "Voting", "Finished"][info[0]];
+  statusDiv.innerText = "State: " + state;
 
   const end = Number(info[3]);
   const now = Math.floor(Date.now() / 1000);
   timerDiv.innerText = end > now ? `Time left: ${end - now}s` : "Phase ended";
 
-  playersDiv.innerHTML = "";
+  // 👥 ЗАГРУЗКА PLAYERS
   const players = await contract.getPlayers(gameId);
+  console.log("PLAYERS FROM CONTRACT:", players);
+
+  playersDiv.innerHTML = "";
+
+  if (players.length === 0) {
+    playersDiv.innerHTML = "<p>No players yet</p>";
+    return;
+  }
 
   for (const p of players) {
     const pi = await contract.getPlayerInfo(gameId, p);
-    const role = ["None","Mafia","Villager","Doctor"][pi[0]];
+    const role = ["None", "Mafia", "Villager", "Doctor"][pi[0]];
     const alive = pi[1];
 
     const card = document.createElement("div");
     card.className = "player-card" + (alive ? "" : " player-dead");
     card.innerHTML = `
-      ${p}<br>
+      <div><b>${p}</b></div>
       <div class="role">Role: ${role}</div>
-      Alive: ${alive}
+      <div>Alive: ${alive}</div>
     `;
 
     if (alive && p !== user) {
