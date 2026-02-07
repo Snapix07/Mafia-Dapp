@@ -21,6 +21,7 @@ let provider, signer, contract, user;
 const statusDiv = document.getElementById("status");
 const timerDiv = document.getElementById("timer");
 const playersDiv = document.getElementById("players");
+const waitingText = document.getElementById("waitingText");
 
 document.getElementById("startGame").onclick = () => call("startGame");
 document.getElementById("endNight").onclick = () => call("endNight");
@@ -42,7 +43,6 @@ async function init() {
 
   contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
-  // 🔐 ПРОВЕРКА: пользователь реально JOIN
   const inGame = await contract.isPlayerInGame(gameId, user);
   if (!inGame) {
     alert("You must join the game first");
@@ -62,16 +62,33 @@ async function call(fn) {
 async function loadGame() {
   const info = await contract.getGameInfo(gameId);
   const state = ["Waiting", "Night", "Day", "Voting", "Finished"][info[0]];
+  const playerCount = Number(info[1]);
+
+  // GAME OVER
+  if (state === "Finished") {
+    const winner = ["None", "Mafia", "Villagers"][info[4]];
+    statusDiv.innerText = "Game Over. Winner: " + winner;
+    timerDiv.innerText = "";
+
+    document.querySelectorAll("button").forEach(b => b.disabled = true);
+    return;
+  }
+
   statusDiv.innerText = "State: " + state;
 
+  // WAITING TEXT
+  if (state === "Waiting" && playerCount < 3) {
+    waitingText.style.display = "block";
+  } else {
+    waitingText.style.display = "none";
+  }
+
+  // TIMER
   const end = Number(info[3]);
   const now = Math.floor(Date.now() / 1000);
   timerDiv.innerText = end > now ? `Time left: ${end - now}s` : "Phase ended";
 
-  // 👥 ЗАГРУЗКА PLAYERS
   const players = await contract.getPlayers(gameId);
-  console.log("PLAYERS FROM CONTRACT:", players);
-
   playersDiv.innerHTML = "";
 
   if (players.length === 0) {
@@ -79,26 +96,43 @@ async function loadGame() {
     return;
   }
 
+  let myRole = null;
+
+  // FIRST PASS — find my role
   for (const p of players) {
     const pi = await contract.getPlayerInfo(gameId, p);
-    const role = ["None", "Mafia", "Villager", "Doctor"][pi[0]];
+    if (p.toLowerCase() === user.toLowerCase()) {
+      myRole = ["None", "Mafia", "Villager", "Doctor"][pi[0]];
+    }
+  }
+
+  // SECOND PASS — render players
+  for (const p of players) {
+    const pi = await contract.getPlayerInfo(gameId, p);
     const alive = pi[1];
+
+    let roleText = "Hidden";
+    if (p.toLowerCase() === user.toLowerCase()) {
+      roleText = myRole;
+    }
 
     const card = document.createElement("div");
     card.className = "player-card" + (alive ? "" : " player-dead");
     card.innerHTML = `
       <div><b>${p}</b></div>
-      <div class="role">Role: ${role}</div>
+      <div class="role">Role: ${roleText}</div>
       <div>Alive: ${alive}</div>
     `;
 
-    if (alive && p !== user) {
-      if (state === "Night" && role === "Mafia") {
+    if (alive && p.toLowerCase() !== user.toLowerCase()) {
+      if (state === "Night" && myRole === "Mafia") {
         addBtn(card, "Kill", () => contract.mafiaKill(gameId, p));
       }
-      if (state === "Night" && role === "Doctor") {
+
+      if (state === "Night" && myRole === "Doctor") {
         addBtn(card, "Heal", () => contract.doctorHeal(gameId, p));
       }
+
       if (state === "Voting") {
         addBtn(card, "Vote", () => contract.voteToEject(gameId, p));
       }
