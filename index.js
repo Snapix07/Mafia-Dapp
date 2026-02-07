@@ -7,6 +7,7 @@ const ABI = [
   'function gameCounter() view returns (uint256)',
   'function isPlayerInGame(uint256 gameId,address) view returns (bool)',
 ]
+
 let provider, signer, contract, user
 
 const connectBtn = document.getElementById('connectBtn')
@@ -14,8 +15,8 @@ const createBtn = document.getElementById('createGameBtn')
 const walletDiv = document.getElementById('wallet')
 const gamesDiv = document.getElementById('games')
 
-connectBtn.onclick = connectWallet
-createBtn.onclick = createGame
+if (connectBtn) connectBtn.onclick = connectWallet
+if (createBtn) createBtn.onclick = createGame
 
 async function connectWallet() {
   if (!window.ethereum) {
@@ -40,38 +41,95 @@ async function connectWallet() {
 }
 
 async function createGame() {
-  const tx = await contract.createGame()
-  await tx.wait()
-  loadGames()
+  try {
+    const tx = await contract.createGame()
+    await tx.wait()
+    loadGames()
+  } catch (e) {
+    console.error(e)
+    alert(e.message)
+  }
 }
 
 async function loadGames() {
-  gamesDiv.innerHTML = ''
-  const count = await contract.gameCounter()
+  if (!gamesDiv) return
+  gamesDiv.innerHTML = 'Loading...'
 
-  for (let i = 1; i <= count; i++) {
-    const info = await contract.getGameInfo(i)
-    const state = ['Waiting', 'Night', 'Day', 'Voting', 'Finished'][info[0]]
-    const players = info[1]
-    const inGame = await contract.isPlayerInGame(i, user)
+  try {
+    const count = await contract.gameCounter()
 
-    const card = document.createElement('div')
-    card.className = 'game-card'
-    card.innerHTML = `
-      <b>Game #${i}</b><br>
-      Status: ${state}<br>
-      Players: ${players}<br><br>
-      <button>${inGame ? 'Enter' : 'Join'}</button>
-    `
-
-    card.querySelector('button').onclick = async () => {
-      if (!inGame) {
-        const tx = await contract.joinGame(i)
-        await tx.wait()
-      }
-      window.location.href = `game.html?id=${i}`
+    if (Number(count) === 0) {
+      gamesDiv.innerHTML = 'No games yet. Create one!'
+      return
     }
 
-    gamesDiv.appendChild(card)
+    gamesDiv.innerHTML = ''
+
+    for (let i = Number(count); i >= 1; i--) {
+      try {
+        const info = await contract.getGameInfo(i)
+        const stateIdx = Number(info[0])
+        const state = ['Waiting', 'Night', 'Day', 'Voting', 'Finished'][
+          stateIdx
+        ]
+        const players = Number(info[1])
+        const inGame = await contract.isPlayerInGame(i, user)
+
+        if (state === 'Finished' && !inGame) continue
+
+        const card = document.createElement('div')
+        card.className = 'game-card'
+
+        if (state === 'Finished') card.style.opacity = '0.6'
+
+        card.innerHTML = `
+          <b>Game #${i}</b><br>
+          Status: ${state}<br>
+          Players: ${players}/10<br>
+          ${state === 'Waiting' ? '<i>Entry Fee: 0.001 ETH</i><br>' : ''}
+          <br>
+          <button id="btn-${i}">${inGame ? 'Enter' : 'Join & Pay'}</button>
+        `
+
+        const btn = card.querySelector(`#btn-${i}`)
+
+        if (state === 'Finished' && !inGame) {
+          btn.disabled = true
+          btn.innerText = 'Closed'
+        } else {
+          btn.onclick = async () => {
+            if (!inGame) {
+              try {
+                // ВОТ ГЛАВНОЕ ИСПРАВЛЕНИЕ: Передаем ETH
+                const tx = await contract.joinGame(i, {
+                  value: ethers.parseEther('0.001'),
+                })
+                btn.innerText = 'Joining...'
+                btn.disabled = true
+                await tx.wait()
+              } catch (err) {
+                console.error(err)
+                alert('Error: ' + (err.reason || err.message))
+                btn.innerText = 'Join & Pay'
+                btn.disabled = false
+                return
+              }
+            }
+            window.location.href = `game.html?id=${i}`
+          }
+        }
+
+        gamesDiv.appendChild(card)
+      } catch (err) {
+        console.warn(`Skipping game ${i}:`, err.message)
+      }
+    }
+
+    if (gamesDiv.innerHTML === '') {
+      gamesDiv.innerHTML = 'No active games found.'
+    }
+  } catch (e) {
+    console.error(e)
+    gamesDiv.innerText = 'Error loading games. Check console.'
   }
 }
