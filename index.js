@@ -3,7 +3,7 @@ const CONTRACT_ADDRESS = '0x8310f2Ce406698636CB83D92F91DBe10CeB11869'
 const ABI = [
   'function createGame() external returns (uint256)',
   'function joinGame(uint256 gameId) external payable',
-  'function getGameInfo(uint256 gameId) view returns (uint8,uint256,uint256,uint256,uint256,uint8)',
+  'function getGameInfo(uint256) view returns (uint8,uint256,uint256,uint256,uint8)',
   'function gameCounter() view returns (uint256)',
   'function isPlayerInGame(uint256 gameId,address) view returns (bool)',
 ]

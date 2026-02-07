@@ -8,7 +8,7 @@ const ABI = [
   'function mafiaKill(uint256,address)',
   'function doctorHeal(uint256,address)',
   'function voteToEject(uint256,address)',
-  'function getGameInfo(uint256) view returns (uint8,uint256,uint256,uint256,uint256,uint8)',
+  'function getGameInfo(uint256) view returns (uint8,uint256,uint256,uint256,uint8)',
   'function getPlayers(uint256) view returns (address[])',
   'function getPlayerInfo(uint256,address) view returns (uint8,bool,bool,uint256)',
   'function isPlayerInGame(uint256,address) view returns (bool)',
