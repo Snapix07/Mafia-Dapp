@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mafia Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+  <h1>Mafia Game</h1>
+
+ <div class="info-box">
+  <div class="status" id="status"></div>
+  <div class="timer" id="timer"></div>
+  <div class="hint" id="waitingText" style="display:none;">
+    Waiting for more players to start the game...
+  </div>
+  <div class="hint">
+    Night: Mafia kills • Doctor heals<br>
+    Voting: Choose a player to eject
+  </div>
+</div>
+
+
+  <h3>Players</h3>
+  <div class="players" id="players"></div>
+
+  <div class="actions">
+    <button id="startGame">Start Game</button>
+    <button id="endNight">End Night</button>
+    <button id="startVoting">Start Voting</button>
+    <button id="endVoting">End Voting</button>
+  </div>
+
+</div>
+
+<script type="module">
+  import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.10.0/+esm";
+  window.ethers = ethers;
+</script>
+
+<script type="module" src="./game.js"></script>
+</body>
+</html>

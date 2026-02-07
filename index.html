@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mafia DApp</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>Mafia DApp</h1>
+    <div class="wallet" id="wallet">Not connected</div>
+  </div>
+
+  <div class="info-box">
+    <h3>Game Rules</h3>
+    <p>
+      Blockchain Mafia game. Players are assigned secret roles.
+      Mafia kills at night, Doctor heals, and during voting players eject suspects.
+    </p>
+  </div>
+
+  <button id="connectBtn">Connect Wallet</button>
+  <button id="createGameBtn">Create Game</button>
+
+  <h2>Available Games</h2>
+  <div class="games" id="games"></div>
+
+</div>
+
+<script type="module">
+  import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.10.0/+esm";
+  window.ethers = ethers;
+</script>
+
+<script type="module" src="./index.js"></script>
+</body>
+</html>
